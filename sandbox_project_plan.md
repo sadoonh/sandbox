@@ -235,7 +235,7 @@ Behavior:
 2. For `one_time`: load `s3://$SANDBOX_BUCKET/sandbox-platform/state/completed_jobs.json` (treat missing file as empty). If the state file exists but cannot be read or parsed, fail closed before running any one-time jobs. **Skip any job whose ID appears in it, even when a specific job is manually targeted.** This is what guarantees that merging a new one-time job runs only that job — previously succeeded jobs are skipped, and a previously *failed* job is retried on the next trigger. To rerun completed one-time work, create a new one-time job with a new filename/job ID or have an admin deliberately remove the completion marker.
 3. Run each remaining job's `main()` inside try/except, with the write recorder configured to allow only the job's declared `OUTPUT_TABLES`. A failure does not stop other jobs.
 4. After a one-time job succeeds, immediately add its ID (with timestamp, run_id, commit SHA) to `completed_jobs.json` and write it back to S3 — update after each job, not at the end, so a later crash can't lose markers. If writing completion state fails, stop running further one-time jobs and exit non-zero; the already-written job cannot be undone, but stopping reduces duplicate or ambiguous state. In dry runs, do not update completion state.
-5. After any required one-time completion state update, and unless dry-run mode is enabled, write one log record per job attempt by appending to the **job runs log table**: a Parquet dataset at `s3://$SANDBOX_BUCKET/sandbox-platform/logs/job_runs/`, registered in Glue as `sandbox_job_runs`, partitioned by `run_date`, written with `wr.s3.to_parquet(dataset=True, mode="append", ...)`. Users can then query run history directly in Athena. In dry-run mode, print the would-be log summary to workflow output instead. Each Job Run gets its own unique `run_id`. The GitHub workflow run is captured separately as `github_run_id`, which can group multiple Job Runs. Record fields:
+5. After any required one-time completion state update, and unless dry-run mode is enabled, write one log record per job attempt by appending to the **job runs log table**: a Parquet dataset at `s3://$SANDBOX_BUCKET/sandbox-platform/logs/job_runs/`, registered in Glue as `sandbox_job_runs`, partitioned by `run_date`, written with `wr.s3.to_parquet(dataset=True, mode="append", schema_evolution=True, ...)`. Users can then query run history directly in Athena. In dry-run mode, print the would-be log summary to workflow output instead. Each Job Run gets its own unique `run_id`. The GitHub workflow run is captured separately as `github_run_id`, which can group multiple Job Runs. Record fields:
 
 ```text
 run_id, job_id, job_type, owner, status (success | failed),
@@ -265,7 +265,7 @@ Run on PRs. For every file in `sandbox/jobs/daily/` and `sandbox/jobs/one_time/`
 - `OUTPUT_TABLES` is a non-empty list of valid table names.
 - `main` exists, is callable, has zero parameters, and is not async.
 - Filename stem is a valid job ID (lowercase letters, digits, underscores; max length 128; may start with a digit; must not start with `sandbox_`).
-- Warn (not fail) if two jobs declare the same output table.
+- Fail (not warn) if two jobs declare the same output table.
 
 Print clear, friendly error messages naming the file and the problem. Exit non-zero on any failure.
 

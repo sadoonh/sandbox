@@ -9,9 +9,6 @@ from sandbox.exceptions import SandboxValidationError
 JOBS_ROOT = Path(__file__).parent / "jobs"
 _TEMPLATE_PATH = Path(__file__).parent / "_template.py.tmpl"
 
-_JOB_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-z0-9_]{0,127}$")
-_VALID_JOB_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,127}$")
-
 
 def _validate_job_name(name: str) -> str | None:
     """Return an error string if name is invalid, else None."""

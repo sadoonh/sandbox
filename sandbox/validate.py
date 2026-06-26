@@ -17,8 +17,8 @@ class ValidationError(Exception):
     pass
 
 
-def _validate_job_file(path: Path) -> list[str]:
-    """Validate a single job file. Returns a list of error strings."""
+def _validate_job_file(path: Path) -> tuple[list[str], list[str]]:
+    """Validate a single job file. Returns (errors, declared output tables)."""
     errors: list[str] = []
     job_id = path.stem
 
@@ -41,7 +41,7 @@ def _validate_job_file(path: Path) -> list[str]:
             spec.loader.exec_module(module)
         except Exception as exc:
             errors.append(f"{path.name}: import failed — {exc}")
-            return errors
+            return errors, []
 
     # Module docstring
     doc = inspect.getdoc(module)
@@ -77,18 +77,14 @@ def _validate_job_file(path: Path) -> list[str]:
         if inspect.iscoroutinefunction(main_fn):
             errors.append(f"{path.name}: main() must not be async.")
         sig = inspect.signature(main_fn)
-        params = [
-            p for p in sig.parameters.values()
-            if p.default is inspect.Parameter.empty
-            and p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
-        ]
         if len(sig.parameters) > 0:
             errors.append(
                 f"{path.name}: main() must have zero parameters "
                 f"(found: {list(sig.parameters)})."
             )
 
-    return errors
+    output_tables = output_tables if isinstance(output_tables, list) else []
+    return errors, output_tables
 
 
 def validate(jobs_root: Path | None = None, *, raise_on_failure: bool = False) -> list[str]:
@@ -107,17 +103,12 @@ def validate(jobs_root: Path | None = None, *, raise_on_failure: bool = False) -
         for path in sorted(folder_path.glob("*.py")):
             if path.name == "__init__.py":
                 continue
-            errors = _validate_job_file(path)
+            errors, output_tables = _validate_job_file(path)
             all_errors.extend(errors)
 
-            # Collect output table declarations for duplicate check (only if file is otherwise valid)
+            # Collect output table declarations for duplicate check (valid files only)
             if not errors:
-                module_id = path.stem
-                spec = importlib.util.spec_from_file_location(module_id, path)
-                module = importlib.util.module_from_spec(spec)
-                with sandbox_io._validation_context():
-                    spec.loader.exec_module(module)
-                for table in getattr(module, "OUTPUT_TABLES", []):
+                for table in output_tables:
                     table_owners[table].append(path.name)
 
     # Duplicate output table check

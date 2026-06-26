@@ -127,6 +127,10 @@ def write_table(df: pd.DataFrame, table_name: str, if_exists: str = "replace") -
     """Write a DataFrame to a sandbox table, registering it in Glue."""
     _check_not_validation_mode()
     _validate_table_name(table_name)
+    if if_exists not in ("replace", "append"):
+        raise SandboxValidationError(
+            f"if_exists must be 'replace' or 'append', got: {if_exists!r}"
+        )
 
     if _in_job_run and _allowed_tables is not None and table_name not in _allowed_tables:
         raise SandboxValidationError(
@@ -178,10 +182,12 @@ def list_tables() -> list[str]:
     """List user sandbox tables (hides platform tables prefixed with sandbox_)."""
     _check_not_validation_mode()
     database = _require_config("SANDBOX_DATABASE", "list_tables")
-    df = wr.catalog.tables(database=database)
-    if df.empty:
-        return []
-    return [t for t in df["Table"].tolist() if not t.startswith("sandbox_")]
+    # get_tables() is an unbounded generator; wr.catalog.tables() silently caps at 100.
+    return [
+        table["Name"]
+        for table in wr.catalog.get_tables(database=database)
+        if not table["Name"].startswith("sandbox_")
+    ]
 
 
 def delete_table(table_name: str, *, confirm: bool = False) -> None:
@@ -201,7 +207,12 @@ def delete_table(table_name: str, *, confirm: bool = False) -> None:
     database = _require_config("SANDBOX_DATABASE", "delete_table")
 
     glue = boto3.client("glue")
-    response = glue.get_table(DatabaseName=database, Name=table_name)
+    try:
+        response = glue.get_table(DatabaseName=database, Name=table_name)
+    except glue.exceptions.EntityNotFoundException:
+        raise SandboxValidationError(
+            f"Table {table_name!r} does not exist in database {database!r}."
+        )
     location: str = response["Table"]["StorageDescriptor"]["Location"]
 
     expected_prefix = f"s3://{bucket}/sandbox-tables/"

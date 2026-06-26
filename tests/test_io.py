@@ -167,6 +167,10 @@ class TestWriteTable:
         with pytest.raises(SandboxValidationError):
             io.write_table(pd.DataFrame(), "BadName")
 
+    def test_rejects_invalid_if_exists(self, sandbox_env, sandbox_aws):
+        with pytest.raises(SandboxValidationError, match="if_exists"):
+            io.write_table(pd.DataFrame({"a": [1]}), "t", if_exists="overwrite")
+
     def test_dry_run_skips_write(self, sandbox_env, monkeypatch, mocker):
         monkeypatch.setenv("SANDBOX_DRY_RUN", "true")
         mock_write = mocker.patch("awswrangler.s3.to_parquet")
@@ -215,21 +219,28 @@ class TestWriteTable:
 
 class TestListTables:
     def test_returns_user_tables(self, sandbox_env, mocker):
-        mock_tables = mocker.patch("awswrangler.catalog.tables")
-        import pandas as pd
-        mock_tables.return_value = pd.DataFrame({
-            "Table": ["orders", "customers", "sandbox_job_runs"],
-            "Database": ["test_sandbox_db"] * 3,
-        })
+        mock_tables = mocker.patch("awswrangler.catalog.get_tables")
+        mock_tables.return_value = iter([
+            {"Name": "orders"},
+            {"Name": "customers"},
+            {"Name": "sandbox_job_runs"},
+        ])
         result = io.list_tables()
         assert "orders" in result
         assert "customers" in result
         assert "sandbox_job_runs" not in result
 
     def test_returns_empty_list_when_no_tables(self, sandbox_env, mocker):
-        mock_tables = mocker.patch("awswrangler.catalog.tables")
-        mock_tables.return_value = pd.DataFrame({"Table": [], "Database": []})
+        mock_tables = mocker.patch("awswrangler.catalog.get_tables")
+        mock_tables.return_value = iter([])
         assert io.list_tables() == []
+
+    def test_returns_all_tables_no_100_limit(self, sandbox_env, mocker):
+        # Regression: wr.catalog.tables() silently caps at 100; get_tables() does not.
+        mock_tables = mocker.patch("awswrangler.catalog.get_tables")
+        mock_tables.return_value = iter([{"Name": f"t{i}"} for i in range(150)])
+        result = io.list_tables()
+        assert len(result) == 150
 
 
 # ---------------------------------------------------------------------------
@@ -252,6 +263,18 @@ class TestDeleteTable:
                 io.delete_table("my_table", confirm=True)
         finally:
             io._end_job_run()
+
+    def test_missing_table_raises_validation_error(self, sandbox_env, mocker):
+        mock_boto = mocker.patch("boto3.client")
+        mock_client = mock_boto.return_value
+
+        class EntityNotFoundException(Exception):
+            pass
+
+        mock_client.exceptions.EntityNotFoundException = EntityNotFoundException
+        mock_client.get_table.side_effect = EntityNotFoundException("not found")
+        with pytest.raises(SandboxValidationError, match="does not exist"):
+            io.delete_table("ghost_table", confirm=True)
 
     def test_rejects_table_outside_sandbox_location(self, sandbox_env, mocker):
         import boto3
