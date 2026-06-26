@@ -1,0 +1,90 @@
+name: Run Sandbox Jobs
+
+on:
+  schedule:
+    - cron: '0 9 * * *'  # 1 AM PST = 9 AM UTC
+  push:
+    branches: [main]
+    paths:
+      - 'sandbox/jobs/one_time/**'
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'Job type'
+        required: true
+        type: choice
+        options: [daily, one_time]
+      job:
+        description: 'Specific job ID (optional)'
+        required: false
+        type: string
+      run_date:
+        description: 'Run date YYYY-MM-DD (optional)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run — skip mutations, print summary'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: sandbox-runner
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: uv sync
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.SANDBOX_AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Set sandbox environment
+        run: |
+          echo "SANDBOX_BUCKET=${{ vars.SANDBOX_BUCKET }}" >> $GITHUB_ENV
+          echo "SANDBOX_DATABASE=${{ vars.SANDBOX_DATABASE }}" >> $GITHUB_ENV
+          echo "SANDBOX_ATHENA_OUTPUT=${{ vars.SANDBOX_ATHENA_OUTPUT }}" >> $GITHUB_ENV
+          echo "SANDBOX_GITHUB_RUN_ID=${{ github.run_id }}" >> $GITHUB_ENV
+          echo "SANDBOX_GITHUB_ACTOR=${{ github.actor }}" >> $GITHUB_ENV
+          echo "SANDBOX_COMMIT_SHA=${{ github.sha }}" >> $GITHUB_ENV
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.run_date }}" ]]; then
+            echo "SANDBOX_RUN_DATE=${{ inputs.run_date }}" >> $GITHUB_ENV
+          else
+            echo "SANDBOX_RUN_DATE=$(date -u +%Y-%m-%d)" >> $GITHUB_ENV
+          fi
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then
+            echo "SANDBOX_DRY_RUN=true" >> $GITHUB_ENV
+          fi
+
+      - name: Resolve job type
+        id: resolve
+        run: |
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "type=daily" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "type=one_time" >> $GITHUB_OUTPUT
+          else
+            echo "type=${{ inputs.type }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run sandbox jobs
+        run: |
+          CMD="uv run python -m sandbox.runner --type ${{ steps.resolve.outputs.type }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.job }}" ]]; then
+            CMD="$CMD --job ${{ inputs.job }}"
+          fi
+          $CMD
