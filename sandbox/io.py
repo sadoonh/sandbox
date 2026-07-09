@@ -30,7 +30,8 @@ def _require_config(key: str, operation: str) -> str:
     value = os.environ.get(key, "").strip()
     if not value:
         raise SandboxConfigError(
-            f"Missing required configuration for {operation!r}: set the {key} environment variable."
+            f"Missing required configuration for {operation!r}: set {key} in your .env file "
+            "(copy .env.example to .env and fill in the values)."
         )
     if key == "SANDBOX_BUCKET" and value.startswith("s3://"):
         raise SandboxConfigError(

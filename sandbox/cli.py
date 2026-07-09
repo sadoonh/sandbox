@@ -163,6 +163,10 @@ def cmd_run(
 
 
 def main() -> None:
+    from sandbox._helpers import load_env_file
+
+    load_env_file()
+
     parser = argparse.ArgumentParser(prog="sandbox", description="Sandbox job framework CLI.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 

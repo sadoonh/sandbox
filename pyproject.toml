@@ -8,6 +8,7 @@ dependencies = [
     "awswrangler>=3.9",
     "pandas>=2.0",
     "boto3>=1.34",
+    "python-dotenv>=1.2.2",
 ]
 
 [project.scripts]

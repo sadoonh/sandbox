@@ -14,7 +14,7 @@ import awswrangler as wr
 import boto3
 import pandas as pd
 
-from sandbox._helpers import dry_run, run_date
+from sandbox._helpers import dry_run, load_env_file, run_date
 from sandbox import io
 from sandbox.exceptions import SandboxError
 
@@ -241,6 +241,7 @@ def _build_record(
 
 
 def main() -> None:
+    load_env_file()
     parser = argparse.ArgumentParser(description="Run sandbox jobs.")
     parser.add_argument("--type", required=True, choices=["daily", "one_time"])
     parser.add_argument("--job", help="Run a specific job by ID.")

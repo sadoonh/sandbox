@@ -4,6 +4,17 @@ import os
 from sandbox.exceptions import SandboxConfigError
 
 
+def load_env_file() -> None:
+    """Load config from a .env file at or above the current directory.
+
+    Variables already set in the environment always win, and a missing
+    .env is fine (e.g. in CI, where config comes from the workflow env).
+    """
+    from dotenv import find_dotenv, load_dotenv
+
+    load_dotenv(find_dotenv(usecwd=True))
+
+
 def run_date() -> datetime.date:
     value = os.environ.get("SANDBOX_RUN_DATE")
     if value is None:

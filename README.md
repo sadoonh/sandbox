@@ -252,7 +252,9 @@ WHERE table_writes LIKE '%"orders_by_customer"%';
 
 ## Running locally
 
-With AWS credentials and the sandbox environment variables set (see below):
+One-time setup: copy `.env.example` to `.env` and fill in the values. The
+`sandbox` CLI loads it automatically — no shell configuration needed. You also
+need AWS credentials configured (e.g. via `aws configure` or SSO).
 
 ```bash
 # Validate all job files — the same check CI runs on your PR
@@ -296,7 +298,7 @@ A dry run prints what *would* happen without making any changes — useful for t
 | `SANDBOX_RUN_DATE` | No | Override logical run date (`YYYY-MM-DD`) |
 | `SANDBOX_DRY_RUN` | No | Set to `true` to skip all mutations |
 
-In GitHub Actions, `SANDBOX_BUCKET`, `SANDBOX_DATABASE`, and `SANDBOX_ATHENA_OUTPUT` are set from repository variables. You do not need to set them locally unless using `io` functions in a notebook.
+Locally, put these in a `.env` file at the repo root (copy `.env.example`) — the `sandbox` CLI loads it automatically. Variables already set in your shell take precedence over the file. In GitHub Actions, `SANDBOX_BUCKET`, `SANDBOX_DATABASE`, and `SANDBOX_ATHENA_OUTPUT` are set from repository variables; no `.env` file exists there.
 
 ---
 
