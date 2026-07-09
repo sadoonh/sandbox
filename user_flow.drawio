@@ -1,0 +1,126 @@
+<mxfile host="app.diagrams.net" agent="claude" version="24.0.0">
+  <diagram name="Job Author User Flow" id="job-author-user-flow">
+    <mxGraphModel dx="1000" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1500" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ============ Nodes ============ -->
+        <mxCell id="nInit" value="uv run sandbox job init&lt;br&gt;&lt;i&gt;(name, type, owner, tables, description)&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="360" y="40" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nFill" value="Fill in main() in the&lt;br&gt;generated job file" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="360" y="150" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nLocal" value="Test locally (optional):&lt;br&gt;&lt;font face=&quot;Courier New&quot;&gt;sandbox validate&lt;br&gt;sandbox job run my_job --dry-run&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="360" y="260" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="nPR" value="Open PR" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="390" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="nValidate" value="CI validation&lt;br&gt;passes?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="390" y="490" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="nFix" value="Fix job file" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="700" y="505" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nMerge" value="Merge to main" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="640" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="nType" value="Job type?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="390" y="740" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="nSched" value="Scheduled run&lt;br&gt;(09:00 UTC daily)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="140" y="890" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nPush" value="Runs on push to main" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="620" y="890" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nRunner" value="Runner executes main()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="380" y="1010" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nWritten" value="Tables written to S3 + Glue&lt;br&gt;Run logged to &lt;font face=&quot;Courier New&quot;&gt;sandbox_job_runs&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="140" y="1130" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="nFailed" value="Logged as failed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="620" y="1130" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nRetry" value="Retried on next trigger&lt;br&gt;(push / manual dispatch)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="620" y="1250" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nQuery" value="Query results in Athena:&lt;br&gt;&lt;font face=&quot;Courier New&quot;&gt;SELECT * FROM&lt;br&gt;sandbox_db.my_table&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1280" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="nComplete" value="one_time: marked complete&lt;br&gt;(skipped permanently)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="320" y="1280" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- ============ Edges ============ -->
+        <mxCell id="eInitFill" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="nInit" target="nFill">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eFillLocal" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="nFill" target="nLocal">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eLocalPR" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="nLocal" target="nPR">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ePRValidate" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="nPR" target="nValidate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eValidateFix" value="errors" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="nValidate" target="nFix">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eFixPR" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=0;entryX=1;entryY=0.5;" edge="1" parent="1" source="nFix" target="nPR">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eValidateMerge" value="pass" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="nValidate" target="nMerge">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eMergeType" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="nMerge" target="nType">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eTypeSched" value="daily" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0;exitY=0.5;entryX=0.35;entryY=0;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="nType" target="nSched">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eTypePush" value="one_time" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0.5;entryY=0;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="nType" target="nPush">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eSchedRunner" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0;entryY=0.5;" edge="1" parent="1" source="nSched" target="nRunner">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ePushRunner" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=1;entryY=0.5;" edge="1" parent="1" source="nPush" target="nRunner">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eRunnerWritten" value="success" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.25;exitY=1;entryX=0.5;entryY=0;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="nRunner" target="nWritten">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eRunnerFailed" value="failure" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0.5;entryY=0;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="nRunner" target="nFailed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eFailedRetry" value="one_time" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="nFailed" target="nRetry">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eRetryRunner" value="retry" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.75;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="nRetry" target="nRunner">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eFailedSched" value="daily: reruns next scheduled day" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0.65;entryY=0;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="nFailed" target="nSched">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="870" y="1160" />
+              <mxPoint x="870" y="855" />
+              <mxPoint x="270" y="855" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="eWrittenQuery" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.25;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="nWritten" target="nQuery">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eWrittenComplete" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.75;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="nWritten" target="nComplete">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
