@@ -12,3 +12,6 @@ wheels/
 # Claude Code
 .claude/
 skills-lock.json
+
+# Local environment (real values live here; .env.example is the template)
+.env
