@@ -362,3 +362,22 @@ class TestLogRecord:
         completed = runner._load_completed_jobs("test-bucket")
         assert "new_job" in completed
         assert succeeded is True
+
+    def test_nullable_columns_get_explicit_dtype(self, mocker):
+        # owner and error_message are None on a successful run; without an
+        # explicit Athena dtype, awswrangler's type inference fails on the
+        # all-null object column and the log write errors out.
+        from datetime import datetime, timezone
+
+        mock_to_parquet = mocker.patch("awswrangler.s3.to_parquet")
+        now = datetime.now(timezone.utc)
+        record = runner._build_record(
+            "rid", "my_job", "daily", None, "success", now, now, 1,
+            "2026-07-09", [], [], "sha", "run_id", "actor", None,
+        )
+
+        runner._write_log_record("test-bucket", "test_sandbox_db", record)
+
+        kwargs = mock_to_parquet.call_args.kwargs
+        assert kwargs["dtype"]["owner"] == "string"
+        assert kwargs["dtype"]["error_message"] == "string"

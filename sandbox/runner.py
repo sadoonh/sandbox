@@ -76,6 +76,9 @@ def _write_log_record(bucket: str, database: str, record: dict) -> None:
         mode="append",
         schema_evolution=True,
         partition_cols=["run_date"],
+        # owner and error_message can be all-None (e.g. error_message on a
+        # successful run); without an explicit type, Athena type inference fails.
+        dtype={"owner": "string", "error_message": "string"},
     )
 
 
