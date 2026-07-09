@@ -54,6 +54,10 @@ jobs:
           aws-region: us-east-1
 
       - name: Set sandbox environment
+        env:
+          # Pass dispatch inputs via env, never inline into the script:
+          # inline ${{ }} interpolation allows shell/GITHUB_ENV injection.
+          INPUT_RUN_DATE: ${{ inputs.run_date }}
         run: |
           echo "SANDBOX_BUCKET=${{ vars.SANDBOX_BUCKET }}" >> $GITHUB_ENV
           echo "SANDBOX_DATABASE=${{ vars.SANDBOX_DATABASE }}" >> $GITHUB_ENV
@@ -61,8 +65,12 @@ jobs:
           echo "SANDBOX_GITHUB_RUN_ID=${{ github.run_id }}" >> $GITHUB_ENV
           echo "SANDBOX_GITHUB_ACTOR=${{ github.actor }}" >> $GITHUB_ENV
           echo "SANDBOX_COMMIT_SHA=${{ github.sha }}" >> $GITHUB_ENV
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.run_date }}" ]]; then
-            echo "SANDBOX_RUN_DATE=${{ inputs.run_date }}" >> $GITHUB_ENV
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "$INPUT_RUN_DATE" ]]; then
+            if [[ ! "$INPUT_RUN_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+              echo "ERROR: run_date must be YYYY-MM-DD, got: $INPUT_RUN_DATE" >&2
+              exit 1
+            fi
+            echo "SANDBOX_RUN_DATE=$INPUT_RUN_DATE" >> $GITHUB_ENV
           else
             echo "SANDBOX_RUN_DATE=$(date -u +%Y-%m-%d)" >> $GITHUB_ENV
           fi
@@ -82,9 +90,11 @@ jobs:
           fi
 
       - name: Run sandbox jobs
+        env:
+          INPUT_JOB: ${{ inputs.job }}
         run: |
-          CMD="uv run python -m sandbox.runner --type ${{ steps.resolve.outputs.type }}"
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.job }}" ]]; then
-            CMD="$CMD --job ${{ inputs.job }}"
+          ARGS=(--type "${{ steps.resolve.outputs.type }}")
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "$INPUT_JOB" ]]; then
+            ARGS+=(--job "$INPUT_JOB")
           fi
-          $CMD
+          uv run python -m sandbox.runner "${ARGS[@]}"

@@ -1,10 +1,12 @@
-"""Tests for sandbox.cli — `sandbox job init`."""
+"""Tests for sandbox.cli — `sandbox job init`, `sandbox job run`."""
+
+import os
 
 import pytest
 from pathlib import Path
 from unittest.mock import patch, call
 
-from sandbox.cli import _validate_job_name, _validate_table_names, create_job
+from sandbox.cli import _validate_job_name, _validate_table_names, cmd_run, create_job
 
 
 class TestJobNameValidation:
@@ -126,6 +128,67 @@ class TestCreateJob:
         content = path.read_text()
         assert '"table_a"' in content
         assert '"table_b"' in content
+
+
+JOB_STUB = '''\
+"""Stub job."""
+OWNER = "analytics"
+OUTPUT_TABLES = ["t"]
+
+def main():
+    pass
+'''
+
+
+def _make_jobs_root(tmp_path: Path) -> Path:
+    (tmp_path / "daily").mkdir()
+    (tmp_path / "one_time").mkdir()
+    return tmp_path
+
+
+class TestCmdRun:
+    def test_unknown_job_id_fails(self, tmp_path, capsys):
+        root = _make_jobs_root(tmp_path)
+        assert cmd_run("nope", jobs_root=root) is False
+        assert "no job found" in capsys.readouterr().err
+
+    def test_ambiguous_job_id_fails(self, tmp_path, capsys):
+        root = _make_jobs_root(tmp_path)
+        (root / "daily" / "dupe.py").write_text(JOB_STUB)
+        (root / "one_time" / "dupe.py").write_text(JOB_STUB)
+        assert cmd_run("dupe", jobs_root=root) is False
+        assert "both daily/ and one_time/" in capsys.readouterr().err
+
+    def test_dispatches_to_runner_with_resolved_type(self, tmp_path):
+        root = _make_jobs_root(tmp_path)
+        (root / "one_time" / "my_backfill.py").write_text(JOB_STUB)
+        with patch("sandbox.runner.run", return_value=True) as mock_run:
+            assert cmd_run("my_backfill", jobs_root=root) is True
+        mock_run.assert_called_once_with("one_time", job_id="my_backfill", jobs_root=root)
+
+    def test_invalid_run_date_fails_before_running(self, tmp_path, capsys):
+        root = _make_jobs_root(tmp_path)
+        (root / "daily" / "my_job.py").write_text(JOB_STUB)
+        with patch("sandbox.runner.run") as mock_run:
+            assert cmd_run("my_job", run_date="not-a-date", jobs_root=root) is False
+        mock_run.assert_not_called()
+        assert "YYYY-MM-DD" in capsys.readouterr().err
+
+    def test_dry_run_sets_env(self, tmp_path, monkeypatch):
+        root = _make_jobs_root(tmp_path)
+        (root / "daily" / "my_job.py").write_text(JOB_STUB)
+        monkeypatch.setenv("SANDBOX_DRY_RUN", "false")  # registers teardown restore
+        with patch("sandbox.runner.run", return_value=True):
+            cmd_run("my_job", dry_run=True, jobs_root=root)
+        assert os.environ["SANDBOX_DRY_RUN"] == "true"
+
+    def test_run_date_sets_env(self, tmp_path, monkeypatch):
+        root = _make_jobs_root(tmp_path)
+        (root / "daily" / "my_job.py").write_text(JOB_STUB)
+        monkeypatch.setenv("SANDBOX_RUN_DATE", "1970-01-01")  # registers teardown restore
+        with patch("sandbox.runner.run", return_value=True):
+            cmd_run("my_job", run_date="2026-07-01", jobs_root=root)
+        assert os.environ["SANDBOX_RUN_DATE"] == "2026-07-01"
 
 
 class TestCLIInteraction:

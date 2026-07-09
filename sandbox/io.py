@@ -61,6 +61,40 @@ def _validate_table_name(name: str) -> None:
         )
 
 
+# Statement types query() accepts. Everything else (INSERT, DROP, CREATE, ...)
+# must go through write_table() / delete_table() so governance applies.
+_READ_ONLY_KEYWORDS = frozenset({"SELECT", "WITH", "SHOW", "DESCRIBE", "DESC", "EXPLAIN"})
+
+
+def _first_sql_keyword(sql: str) -> str:
+    """Return the first keyword of a SQL statement, skipping comments. Uppercase."""
+    pos = 0
+    end = len(sql)
+    while pos < end:
+        if sql[pos].isspace():
+            pos += 1
+        elif sql.startswith("--", pos):
+            newline = sql.find("\n", pos)
+            pos = end if newline == -1 else newline + 1
+        elif sql.startswith("/*", pos):
+            close = sql.find("*/", pos + 2)
+            pos = end if close == -1 else close + 2
+        else:
+            break
+    match = re.match(r"[A-Za-z_]+", sql[pos:])
+    return match.group(0).upper() if match else ""
+
+
+def _check_read_only(sql: str) -> None:
+    keyword = _first_sql_keyword(sql)
+    if keyword not in _READ_ONLY_KEYWORDS:
+        raise SandboxValidationError(
+            f"query() only accepts read-only statements "
+            f"({', '.join(sorted(_READ_ONLY_KEYWORDS))}) — got {keyword or sql[:40]!r}. "
+            "Use write_table() to create or update tables and delete_table() to remove them."
+        )
+
+
 def _check_not_validation_mode() -> None:
     if _validation_mode:
         raise SandboxError(
@@ -100,8 +134,13 @@ def _end_job_run() -> None:
 # ---------------------------------------------------------------------------
 
 def query(sql: str) -> pd.DataFrame:
-    """Run a read-only Athena SQL query and return a DataFrame."""
+    """Run a read-only Athena SQL query and return a DataFrame.
+
+    Only read-only statements (SELECT, WITH, SHOW, DESCRIBE, EXPLAIN) are
+    accepted; DML/DDL raises SandboxValidationError.
+    """
     _check_not_validation_mode()
+    _check_read_only(sql)
     database = os.environ.get("SANDBOX_DATABASE")
     workgroup = os.environ.get("SANDBOX_WORKGROUP")
     s3_output = os.environ.get("SANDBOX_ATHENA_OUTPUT")

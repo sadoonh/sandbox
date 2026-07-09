@@ -1,5 +1,8 @@
-"""CLI: `sandbox job init`."""
+"""CLI: `sandbox job init`, `sandbox job run`, `sandbox validate`."""
 
+import argparse
+import datetime
+import os
 import re
 import sys
 from pathlib import Path
@@ -121,10 +124,73 @@ def cmd_init(jobs_root: Path | None = None) -> None:
     print(f"Next step: open {path.name} and fill in main().")
 
 
+def cmd_run(
+    job_id: str,
+    *,
+    dry_run: bool = False,
+    run_date: str | None = None,
+    jobs_root: Path | None = None,
+) -> bool:
+    """Run a single job locally. Returns True on success."""
+    from sandbox import runner
+
+    found = [
+        job_type
+        for job_type in ("daily", "one_time")
+        if runner._discover_jobs(job_type, jobs_root, job_id)
+    ]
+    if not found:
+        print(f"Error: no job found with ID {job_id!r}.", file=sys.stderr)
+        return False
+    if len(found) > 1:
+        print(
+            f"Error: job ID {job_id!r} exists in both daily/ and one_time/ — rename one.",
+            file=sys.stderr,
+        )
+        return False
+
+    if run_date is not None:
+        try:
+            datetime.date.fromisoformat(run_date)
+        except ValueError:
+            print(f"Error: --run-date must be YYYY-MM-DD, got {run_date!r}.", file=sys.stderr)
+            return False
+        os.environ["SANDBOX_RUN_DATE"] = run_date
+    if dry_run:
+        os.environ["SANDBOX_DRY_RUN"] = "true"
+
+    return runner.run(found[0], job_id=job_id, jobs_root=jobs_root)
+
+
 def main() -> None:
-    args = sys.argv[1:]
-    if len(args) >= 2 and args[0] == "job" and args[1] == "init":
+    parser = argparse.ArgumentParser(prog="sandbox", description="Sandbox job framework CLI.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    job_parser = subparsers.add_parser("job", help="Manage sandbox jobs.")
+    job_subparsers = job_parser.add_subparsers(dest="job_command", required=True)
+
+    job_subparsers.add_parser("init", help="Interactively create a new job file.")
+
+    run_parser = job_subparsers.add_parser("run", help="Run a single job locally.")
+    run_parser.add_argument("job_id", help="Job ID (filename stem).")
+    run_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Run job code without writing tables or updating state.",
+    )
+    run_parser.add_argument(
+        "--run-date",
+        help="Override the logical run date (YYYY-MM-DD).",
+    )
+
+    subparsers.add_parser("validate", help="Validate all job files (same check CI runs).")
+
+    args = parser.parse_args()
+
+    if args.command == "job" and args.job_command == "init":
         cmd_init()
-    else:
-        print("Usage: sandbox job init", file=sys.stderr)
-        sys.exit(1)
+    elif args.command == "job" and args.job_command == "run":
+        success = cmd_run(args.job_id, dry_run=args.dry_run, run_date=args.run_date)
+        sys.exit(0 if success else 1)
+    elif args.command == "validate":
+        from sandbox.validate import main as validate_main
+        validate_main()

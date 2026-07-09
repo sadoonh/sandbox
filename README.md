@@ -33,12 +33,13 @@ OUTPUT_TABLES = ["orders_by_customer"]
 
 
 def main() -> None:
-    from sandbox import io
+    from sandbox import io, run_date
 
-    df = io.query("""
+    date = run_date()
+    df = io.query(f"""
         SELECT customer_id, COUNT(*) AS order_count, SUM(total) AS revenue
         FROM source_db.orders
-        WHERE order_date = DATE '{{ run_date }}'
+        WHERE order_date = DATE '{date}'
         GROUP BY customer_id
     """)
     io.write_table(df, "orders_by_customer")
@@ -133,7 +134,9 @@ Use these functions inside `main()` or in a Jupyter notebook.
 ```python
 from sandbox import io
 
-# Run a SQL query against Athena and get a DataFrame
+# Run a read-only SQL query against Athena and get a DataFrame.
+# Only SELECT/WITH/SHOW/DESCRIBE/EXPLAIN statements are accepted —
+# use write_table() and delete_table() for mutations.
 df = io.query("SELECT * FROM source_db.orders WHERE order_date >= DATE '2026-01-01'")
 
 # Read an entire sandbox table
@@ -244,6 +247,26 @@ SELECT job_id, started_at, status
 FROM sandbox_job_runs
 WHERE table_writes LIKE '%"orders_by_customer"%';
 ```
+
+---
+
+## Running locally
+
+With AWS credentials and the sandbox environment variables set (see below):
+
+```bash
+# Validate all job files — the same check CI runs on your PR
+uv run sandbox validate
+
+# Run a single job locally without writing anything
+uv run sandbox job run my_job --dry-run
+
+# Run a single job for a specific logical date
+uv run sandbox job run my_job --run-date 2026-07-01
+```
+
+`sandbox job run` uses the same runner as CI: one-time jobs that already
+succeeded are skipped, and successful non-dry runs are recorded.
 
 ---
 

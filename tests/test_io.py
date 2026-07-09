@@ -115,6 +115,47 @@ class TestQuery:
         assert "workgroup" not in kwargs
 
 
+class TestQueryReadOnly:
+    @pytest.mark.parametrize("sql", [
+        "INSERT INTO orders VALUES (1)",
+        "DROP TABLE orders",
+        "CREATE TABLE t AS SELECT 1",
+        "DELETE FROM orders",
+        "UPDATE orders SET x = 1",
+        "MSCK REPAIR TABLE orders",
+        "",
+        "-- only a comment",
+    ])
+    def test_rejects_non_read_only(self, sandbox_env, mocker, sql):
+        mock_read = mocker.patch("awswrangler.athena.read_sql_query")
+        with pytest.raises(SandboxValidationError, match="read-only"):
+            io.query(sql)
+        mock_read.assert_not_called()
+
+    @pytest.mark.parametrize("sql", [
+        "SELECT 1",
+        "select 1",
+        "  \n  SELECT 1",
+        "WITH t AS (SELECT 1) SELECT * FROM t",
+        "-- leading comment\nSELECT 1",
+        "/* block\ncomment */ SELECT 1",
+        "SHOW TABLES",
+        "DESCRIBE orders",
+        "EXPLAIN SELECT 1",
+    ])
+    def test_allows_read_only(self, sandbox_env, mocker, sql):
+        mock_read = mocker.patch("awswrangler.athena.read_sql_query")
+        mock_read.return_value = pd.DataFrame()
+        io.query(sql)  # should not raise
+        mock_read.assert_called_once()
+
+    def test_rejects_ddl_hidden_behind_comment(self, sandbox_env, mocker):
+        mock_read = mocker.patch("awswrangler.athena.read_sql_query")
+        with pytest.raises(SandboxValidationError, match="DROP"):
+            io.query("-- looks harmless\nDROP TABLE orders")
+        mock_read.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # read_table()
 # ---------------------------------------------------------------------------
