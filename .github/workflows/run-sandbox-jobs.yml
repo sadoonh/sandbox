@@ -2,7 +2,7 @@ name: Run Sandbox Jobs
 
 on:
   schedule:
-    - cron: '0 9 * * *'  # 1 AM PST = 9 AM UTC
+    - cron: '0 9 * * *'  # 2 AM PST = 9 AM UTC
   push:
     branches: [main]
     paths:
