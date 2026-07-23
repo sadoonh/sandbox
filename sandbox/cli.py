@@ -1,127 +1,130 @@
-"""CLI: `sandbox job init`, `sandbox job run`, `sandbox validate`."""
+"""CLI: create, run, list, and validate sandbox jobs."""
 
 import argparse
+import ast
 import datetime
 import os
-import re
 import sys
 from pathlib import Path
 
-from sandbox.exceptions import SandboxValidationError
+from tabulate import tabulate
+
+from sandbox.job_creation import (
+    create_job,
+    validate_job_name as _validate_job_name,
+    validate_table_names as _validate_table_names,
+)
 
 JOBS_ROOT = Path(__file__).parent / "jobs"
-_TEMPLATE_PATH = Path(__file__).parent / "_template.py.tmpl"
+_JOB_SCHEDULES = {
+    "daily": "Daily 09:00 UTC",
+    "one_time": "After merge (once)",
+}
 
 
-def _validate_job_name(name: str) -> str | None:
-    """Return an error string if name is invalid, else None."""
-    if not name:
-        return "Job name cannot be empty."
-    if len(name) > 128:
-        return "Job name must be 128 characters or fewer."
-    if name.startswith("sandbox_"):
-        return "Job name must not start with 'sandbox_' (reserved prefix)."
-    if any(c.isupper() for c in name):
-        return "Job name must be lowercase."
-    if not re.match(r"^[a-z0-9][a-z0-9_]*$", name):
-        return (
-            "Job name may only contain lowercase letters, digits, and underscores. "
-            "It may start with a letter or digit."
-        )
-    return None
+class _CompactHelpFormatter(argparse.HelpFormatter):
+    """Render terse, consistently capitalized usage text."""
+
+    def __init__(self, prog: str) -> None:
+        super().__init__(prog, max_help_position=30)
+
+    def _format_usage(self, usage, actions, groups, prefix):
+        return super()._format_usage(usage, actions, groups, "Usage: ")
+
+    def _format_action(self, action):
+        if isinstance(action, argparse._SubParsersAction):
+            return "".join(
+                super(_CompactHelpFormatter, self)._format_action(subaction)
+                for subaction in action._get_subactions()
+            )
+        return super()._format_action(action)
 
 
-def _validate_table_names(raw: str) -> tuple[list[str] | None, str | None]:
-    """Parse and validate comma-separated table names. Returns (names, error)."""
-    from sandbox.io import _validate_table_name
+class _CompactArgumentParser(argparse.ArgumentParser):
+    """Argument parser with minimal help headings and text."""
 
-    names = [n.strip() for n in raw.split(",") if n.strip()]
-    if not names:
-        return None, "At least one output table is required."
-    for name in names:
-        try:
-            _validate_table_name(name)
-        except SandboxValidationError as e:
-            return None, str(e)
-    return names, None
+    def __init__(self, *args, **kwargs) -> None:
+        kwargs["add_help"] = False
+        kwargs.setdefault("formatter_class", _CompactHelpFormatter)
+        super().__init__(*args, **kwargs)
+        self._positionals.title = "Arguments"
+        self._optionals.title = "Options"
+        self.add_argument("-h", "--help", action="help", help="Show help.")
 
-
-def _render_template(
-    description: str,
-    owner: str,
-    output_tables: list[str],
-) -> str:
-    template = _TEMPLATE_PATH.read_text()
-    tables_repr = ", ".join(f'"{t}"' for t in output_tables)
-    first_table = output_tables[0]
-    return (
-        template
-        .replace("{{ description }}", description)
-        .replace("{{ owner }}", owner)
-        .replace("{{ output_tables }}", tables_repr)
-        .replace("{{ first_table }}", first_table)
-    )
+    def add_subparsers(self, **kwargs):
+        self._positionals.title = "Commands"
+        return super().add_subparsers(**kwargs)
 
 
-def create_job(
-    jobs_root: Path,
-    job_name: str,
-    job_type: str,
-    owner: str,
-    output_tables: list[str],
-    description: str,
-) -> Path:
-    """Render template and write job file. Raises FileExistsError if already exists."""
-    dest = jobs_root / job_type / f"{job_name}.py"
-    if dest.exists():
-        raise FileExistsError(f"Job file already exists: {dest}")
-    content = _render_template(description, owner, output_tables)
-    dest.write_text(content, encoding="utf-8")
-    return dest
+def cmd_init(jobs_root: Path | None = None) -> bool:
+    """Run the interactive job-creation wizard."""
+    from sandbox.job_wizard import run_job_init
+
+    return run_job_init(jobs_root or JOBS_ROOT)
 
 
-def cmd_init(jobs_root: Path | None = None) -> None:
+def _read_job_owner(path: Path) -> str:
+    """Read a job's literal OWNER without importing or executing the job."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError, UnicodeError):
+        return "<unknown>"
+
+    for node in tree.body:
+        value = None
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "OWNER" for target in node.targets
+        ):
+            value = node.value
+        elif (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "OWNER"
+        ):
+            value = node.value
+
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            return value.value
+
+    return "<unknown>"
+
+
+def _display_location(path: Path, jobs_root: Path) -> str:
+    """Return a compact location relative to the jobs directory."""
+    try:
+        return str(path.relative_to(jobs_root))
+    except ValueError:
+        return str(path)
+
+
+def cmd_list_jobs(jobs_root: Path | None = None) -> None:
+    """Print the available jobs and their scheduling metadata."""
     root = jobs_root or JOBS_ROOT
+    rows: list[tuple[str, str, str, str, str]] = []
 
-    def prompt(message: str, validate=None) -> str:
-        while True:
-            value = input(message).strip()
-            if validate:
-                error = validate(value)
-                if error:
-                    print(f"  Error: {error}", file=sys.stderr)
-                    continue
-            return value
+    for job_type in ("daily", "one_time"):
+        folder = root / job_type
+        if not folder.exists():
+            continue
+        for path in sorted(folder.glob("*.py")):
+            if path.name == "__init__.py":
+                continue
+            rows.append(
+                (
+                    path.stem,
+                    job_type,
+                    _read_job_owner(path),
+                    _display_location(path, root),
+                    _JOB_SCHEDULES[job_type],
+                )
+            )
 
-    def require_nonempty(v: str) -> str | None:
-        return None if v else "This field is required."
+    if not rows:
+        print("No sandbox jobs found.")
+        return
 
-    job_name = prompt("Job name: ", _validate_job_name)
-
-    def validate_type(v: str) -> str | None:
-        return None if v in ("daily", "one_time") else "Enter 'daily' or 'one_time'."
-
-    job_type = prompt("Job type (daily/one_time): ", validate_type)
-    owner = prompt("Owner: ", require_nonempty)
-
-    tables_raw = prompt(
-        "Output tables (comma-separated): ",
-        lambda v: _validate_table_names(v)[1],
-    )
-    output_tables, _ = _validate_table_names(tables_raw)
-
-    description = prompt("Description (one line): ", require_nonempty)
-
-    path = create_job(
-        jobs_root=root,
-        job_name=job_name,
-        job_type=job_type,
-        owner=owner,
-        output_tables=output_tables,
-        description=description,
-    )
-    print(f"Created: {path}")
-    print(f"Next step: open {path.name} and fill in main().")
+    headers = ("JOB", "TYPE", "AUTHOR", "LOCATION", "RUNS")
+    print(tabulate(rows, headers=headers, tablefmt="rounded_grid"))
 
 
 def cmd_run(
@@ -162,39 +165,75 @@ def cmd_run(
     return runner.run(found[0], job_id=job_id, jobs_root=jobs_root)
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = _CompactArgumentParser(
+        prog="sandbox",
+        usage="sandbox {job,list,validate}",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    job_parser = subparsers.add_parser(
+        "job",
+        help="Create or run jobs.",
+        usage="sandbox job {init,run}",
+    )
+    job_subparsers = job_parser.add_subparsers(dest="job_command", required=True)
+    job_subparsers.add_parser(
+        "init",
+        help="Create a job.",
+        usage="sandbox job init",
+    )
+
+    run_parser = job_subparsers.add_parser(
+        "run",
+        help="Run a job locally.",
+        usage="sandbox job run JOB_ID [--dry-run] [--run-date YYYY-MM-DD]",
+    )
+    run_parser.add_argument("job_id", metavar="JOB_ID", help="Job filename without .py.")
+    run_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Skip writes and state updates.",
+    )
+    run_parser.add_argument(
+        "--run-date",
+        metavar="YYYY-MM-DD",
+        help="Set the logical run date.",
+    )
+
+    list_parser = subparsers.add_parser(
+        "list",
+        help="List resources.",
+        usage="sandbox list {job}",
+    )
+    list_subparsers = list_parser.add_subparsers(dest="list_command", required=True)
+    list_subparsers.add_parser(
+        "job",
+        help="List job metadata.",
+        usage="sandbox list job",
+    )
+
+    subparsers.add_parser(
+        "validate",
+        help="Validate job files.",
+        usage="sandbox validate",
+    )
+    return parser
+
+
 def main() -> None:
     from sandbox._helpers import load_env_file
 
     load_env_file()
-
-    parser = argparse.ArgumentParser(prog="sandbox", description="Sandbox job framework CLI.")
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    job_parser = subparsers.add_parser("job", help="Manage sandbox jobs.")
-    job_subparsers = job_parser.add_subparsers(dest="job_command", required=True)
-
-    job_subparsers.add_parser("init", help="Interactively create a new job file.")
-
-    run_parser = job_subparsers.add_parser("run", help="Run a single job locally.")
-    run_parser.add_argument("job_id", help="Job ID (filename stem).")
-    run_parser.add_argument(
-        "--dry-run", action="store_true",
-        help="Run job code without writing tables or updating state.",
-    )
-    run_parser.add_argument(
-        "--run-date",
-        help="Override the logical run date (YYYY-MM-DD).",
-    )
-
-    subparsers.add_parser("validate", help="Validate all job files (same check CI runs).")
-
-    args = parser.parse_args()
+    args = _build_parser().parse_args()
 
     if args.command == "job" and args.job_command == "init":
-        cmd_init()
+        sys.exit(0 if cmd_init() else 1)
     elif args.command == "job" and args.job_command == "run":
         success = cmd_run(args.job_id, dry_run=args.dry_run, run_date=args.run_date)
         sys.exit(0 if success else 1)
+    elif args.command == "list" and args.list_command == "job":
+        cmd_list_jobs()
     elif args.command == "validate":
         from sandbox.validate import main as validate_main
         validate_main()

@@ -19,7 +19,7 @@ A lightweight framework for writing Python transformation jobs that publish quer
 uv run sandbox job init
 ```
 
-You'll be prompted for a name, type, owner, output tables, and description. A job file is created in the right folder automatically.
+A compact terminal wizard guides you through the name, type, owner, output tables, and description one step at a time. Use the arrow keys to choose the job type, then review and confirm the summary before the file is created.
 
 ### 2. Fill in `main()`
 
@@ -257,6 +257,9 @@ One-time setup: copy `.env.example` to `.env` and fill in the values. The
 need AWS credentials configured (e.g. via `aws configure` or SSO).
 
 ```bash
+# List existing jobs, their owners, locations, and schedules
+uv run sandbox list job
+
 # Validate all job files — the same check CI runs on your PR
 uv run sandbox validate
 
