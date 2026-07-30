@@ -13,6 +13,24 @@ A lightweight framework for writing Python transformation jobs that publish quer
 
 ## Quickstart
 
+### Browser wizard on Windows
+
+For teammates who do not use the command line:
+
+1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) once.
+2. Right-click `Launch-Sandbox.ps1` and select **Run with PowerShell**.
+3. Fill in the form in the browser, review it, and select **Create job**.
+
+The launcher installs or updates the project dependencies before opening the app. Leave the PowerShell window open while using the wizard; closing it stops the app.
+
+On macOS or Linux, run the equivalent Bash launcher from the project folder:
+
+```bash
+./Launch-Sandbox.sh
+```
+
+Leave the terminal window open while using the wizard.
+
 ### 1. Create a job
 
 ```bash

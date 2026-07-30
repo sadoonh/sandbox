@@ -13,6 +13,7 @@ dependencies = [
     "tabulate>=0.10.0",
     "questionary>=2.1.1",
     "rich>=15.0.0",
+    "streamlit>=1.45",
 ]
 
 [project.scripts]
